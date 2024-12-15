@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<!-- saved from url=(0043)https://sassafras13.github.io/ReparamTrick/ -->
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>The Reparameterization Trick – Emma Benjaminson – Data Scientist</title>
+
+        
+    
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+
+    
+    <meta name="description" content="We first encountered the reparameterization trick when learning about variational autoencoders and how they approximate posterior distributions using KL divergence and the Evidence Lower Bound (ELBO). We saw that, if we were training a neural network to act as a VAE, then eventually we would need to perform backpropagation across a node in the network that was stochastic, because the ELBO has a stochastic term. But we cannot perform backpropagation across a stochastic node, because we cannot take the derivative of a random variable. So instead, we used something called the reparameterization trick, to restructure the problem. In this post, I am going to go into this solution in more detail. First I will outline why we need the trick in the first place, and then I will try to provide more insight into the mathematics behind the reparameterization trick.
+
+">
+    <meta property="og:description" content="We first encountered the reparameterization trick when learning about variational autoencoders and how they approximate posterior distributions using KL divergence and the Evidence Lower Bound (ELBO). We saw that, if we were training a neural network to act as a VAE, then eventually we would need to perform backpropagation across a node in the network that was stochastic, because the ELBO has a stochastic term. But we cannot perform backpropagation across a stochastic node, because we cannot take the derivative of a random variable. So instead, we used something called the reparameterization trick, to restructure the problem. In this post, I am going to go into this solution in more detail. First I will outline why we need the trick in the first place, and then I will try to provide more insight into the mathematics behind the reparameterization trick.
+
+">
+    
+    <meta name="author" content="Emma Benjaminson">
+
+    
+    <meta property="og:title" content="The Reparameterization Trick">
+    <meta property="twitter:title" content="The Reparameterization Trick">
+    
+
+    <!--[if lt IE 9]>
+      <script src="http://html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <link rel="stylesheet" type="text/css" href="./The Reparameterization Trick_files/style.css">
+    <link rel="alternate" type="application/rss+xml" title="Emma Benjaminson - Data Scientist" href="https://sassafras13.github.io/feed.xml">
+
+    <!-- Created with Jekyll Now - http://github.com/barryclark/jekyll-now -->
+  <style type="text/css">.MathJax_Hover_Frame {border-radius: .25em; -webkit-border-radius: .25em; -moz-border-radius: .25em; -khtml-border-radius: .25em; box-shadow: 0px 0px 15px #83A; -webkit-box-shadow: 0px 0px 15px #83A; -moz-box-shadow: 0px 0px 15px #83A; -khtml-box-shadow: 0px 0px 15px #83A; border: 1px solid #A6D ! important; display: inline-block; position: absolute}
+.MathJax_Menu_Button .MathJax_Hover_Arrow {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 4px; -webkit-border-radius: 4px; -moz-border-radius: 4px; -khtml-border-radius: 4px; font-family: 'Courier New',Courier; font-size: 9px; color: #F0F0F0}
+.MathJax_Menu_Button .MathJax_Hover_Arrow span {display: block; background-color: #AAA; border: 1px solid; border-radius: 3px; line-height: 0; padding: 4px}
+.MathJax_Hover_Arrow:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_Hover_Arrow:hover span {background-color: #CCC!important}
+</style><style type="text/css">#MathJax_About {position: fixed; left: 50%; width: auto; text-align: center; border: 3px outset; padding: 1em 2em; background-color: #DDDDDD; color: black; cursor: default; font-family: message-box; font-size: 120%; font-style: normal; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; border-radius: 15px; -webkit-border-radius: 15px; -moz-border-radius: 15px; -khtml-border-radius: 15px; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_About.MathJax_MousePost {outline: none}
+.MathJax_Menu {position: absolute; background-color: white; color: black; width: auto; padding: 2px; border: 1px solid #CCCCCC; margin: 0; cursor: default; font: menu; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; z-index: 201; box-shadow: 0px 10px 20px #808080; -webkit-box-shadow: 0px 10px 20px #808080; -moz-box-shadow: 0px 10px 20px #808080; -khtml-box-shadow: 0px 10px 20px #808080; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+.MathJax_MenuItem {padding: 2px 2em; background: transparent}
+.MathJax_MenuArrow {position: absolute; right: .5em; padding-top: .25em; color: #666666; font-size: .75em}
+.MathJax_MenuActive .MathJax_MenuArrow {color: white}
+.MathJax_MenuArrow.RTL {left: .5em; right: auto}
+.MathJax_MenuCheck {position: absolute; left: .7em}
+.MathJax_MenuCheck.RTL {right: .7em; left: auto}
+.MathJax_MenuRadioCheck {position: absolute; left: 1em}
+.MathJax_MenuRadioCheck.RTL {right: 1em; left: auto}
+.MathJax_MenuLabel {padding: 2px 2em 4px 1.33em; font-style: italic}
+.MathJax_MenuRule {border-top: 1px solid #CCCCCC; margin: 4px 1px 0px}
+.MathJax_MenuDisabled {color: GrayText}
+.MathJax_MenuActive {background-color: Highlight; color: HighlightText}
+.MathJax_MenuDisabled:focus, .MathJax_MenuLabel:focus {background-color: #E8E8E8}
+.MathJax_ContextMenu:focus {outline: none}
+.MathJax_ContextMenu .MathJax_MenuItem:focus {outline: none}
+#MathJax_AboutClose {top: .2em; right: .2em}
+.MathJax_Menu .MathJax_MenuClose {top: -10px; left: -10px}
+.MathJax_MenuClose {position: absolute; cursor: pointer; display: inline-block; border: 2px solid #AAA; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; font-family: 'Courier New',Courier; font-size: 24px; color: #F0F0F0}
+.MathJax_MenuClose span {display: block; background-color: #AAA; border: 1.5px solid; border-radius: 18px; -webkit-border-radius: 18px; -moz-border-radius: 18px; -khtml-border-radius: 18px; line-height: 0; padding: 8px 0 6px}
+.MathJax_MenuClose:hover {color: white!important; border: 2px solid #CCC!important}
+.MathJax_MenuClose:hover span {background-color: #CCC!important}
+.MathJax_MenuClose:hover:focus {outline: none}
+</style><style type="text/css">.MathJax_Preview .MJXf-math {color: inherit!important}
+</style><style type="text/css">.MJX_Assistive_MathML {position: absolute!important; top: 0; left: 0; clip: rect(1px, 1px, 1px, 1px); padding: 1px 0 0 0!important; border: 0!important; height: 1px!important; width: 1px!important; overflow: hidden!important; display: block!important; -webkit-touch-callout: none; -webkit-user-select: none; -khtml-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none}
+.MJX_Assistive_MathML.MJX_Assistive_MathML_Block {width: 100%!important}
+</style><style type="text/css">#MathJax_Zoom {position: absolute; background-color: #F0F0F0; overflow: auto; display: block; z-index: 301; padding: .5em; border: 1px solid black; margin: 0; font-weight: normal; font-style: normal; text-align: left; text-indent: 0; text-transform: none; line-height: normal; letter-spacing: normal; word-spacing: normal; word-wrap: normal; white-space: nowrap; float: none; -webkit-box-sizing: content-box; -moz-box-sizing: content-box; box-sizing: content-box; box-shadow: 5px 5px 15px #AAAAAA; -webkit-box-shadow: 5px 5px 15px #AAAAAA; -moz-box-shadow: 5px 5px 15px #AAAAAA; -khtml-box-shadow: 5px 5px 15px #AAAAAA; filter: progid:DXImageTransform.Microsoft.dropshadow(OffX=2, OffY=2, Color='gray', Positive='true')}
+#MathJax_ZoomOverlay {position: absolute; left: 0; top: 0; z-index: 300; display: inline-block; width: 100%; height: 100%; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+#MathJax_ZoomFrame {position: relative; display: inline-block; height: 0; width: 0}
+#MathJax_ZoomEventTrap {position: absolute; left: 0; top: 0; z-index: 302; display: inline-block; border: 0; padding: 0; margin: 0; background-color: white; opacity: 0; filter: alpha(opacity=0)}
+</style><style type="text/css">.MathJax_Preview {color: #888}
+#MathJax_Message {position: fixed; left: 1em; bottom: 1.5em; background-color: #E6E6E6; border: 1px solid #959595; margin: 0px; padding: 2px 8px; z-index: 102; color: black; font-size: 80%; width: auto; white-space: nowrap}
+#MathJax_MSIE_Frame {position: absolute; top: 0; left: 0; width: 0px; z-index: 101; border: 0px; margin: 0px; padding: 0px}
+.MathJax_Error {color: #CC0000; font-style: italic}
+</style><style type="text/css">.MJXp-script {font-size: .8em}
+.MJXp-right {-webkit-transform-origin: right; -moz-transform-origin: right; -ms-transform-origin: right; -o-transform-origin: right; transform-origin: right}
+.MJXp-bold {font-weight: bold}
+.MJXp-italic {font-style: italic}
+.MJXp-scr {font-family: MathJax_Script,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-frak {font-family: MathJax_Fraktur,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-sf {font-family: MathJax_SansSerif,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-cal {font-family: MathJax_Caligraphic,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-mono {font-family: MathJax_Typewriter,'Times New Roman',Times,STIXGeneral,serif}
+.MJXp-largeop {font-size: 150%}
+.MJXp-largeop.MJXp-int {vertical-align: -.2em}
+.MJXp-math {display: inline-block; line-height: 1.2; text-indent: 0; font-family: 'Times New Roman',Times,STIXGeneral,serif; white-space: nowrap; border-collapse: collapse}
+.MJXp-display {display: block; text-align: center; margin: 1em 0}
+.MJXp-math span {display: inline-block}
+.MJXp-box {display: block!important; text-align: center}
+.MJXp-box:after {content: " "}
+.MJXp-rule {display: block!important; margin-top: .1em}
+.MJXp-char {display: block!important}
+.MJXp-mo {margin: 0 .15em}
+.MJXp-mfrac {margin: 0 .125em; vertical-align: .25em}
+.MJXp-denom {display: inline-table!important; width: 100%}
+.MJXp-denom > * {display: table-row!important}
+.MJXp-surd {vertical-align: top}
+.MJXp-surd > * {display: block!important}
+.MJXp-script-box > *  {display: table!important; height: 50%}
+.MJXp-script-box > * > * {display: table-cell!important; vertical-align: top}
+.MJXp-script-box > *:last-child > * {vertical-align: bottom}
+.MJXp-script-box > * > * > * {display: block!important}
+.MJXp-mphantom {visibility: hidden}
+.MJXp-munderover {display: inline-table!important}
+.MJXp-over {display: inline-block!important; text-align: center}
+.MJXp-over > * {display: block!important}
+.MJXp-munderover > * {display: table-row!important}
+.MJXp-mtable {vertical-align: .25em; margin: 0 .125em}
+.MJXp-mtable > * {display: inline-table!important; vertical-align: middle}
+.MJXp-mtr {display: table-row!important}
+.MJXp-mtd {display: table-cell!important; text-align: center; padding: .5em 0 0 .5em}
+.MJXp-mtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-mlabeledtr {display: table-row!important}
+.MJXp-mlabeledtr > .MJXp-mtd:first-child {padding-left: 0}
+.MJXp-mlabeledtr:first-child > .MJXp-mtd {padding-top: 0}
+.MJXp-merror {background-color: #FFFF88; color: #CC0000; border: 1px solid #CC0000; padding: 1px 3px; font-style: normal; font-size: 90%}
+.MJXp-scale0 {-webkit-transform: scaleX(.0); -moz-transform: scaleX(.0); -ms-transform: scaleX(.0); -o-transform: scaleX(.0); transform: scaleX(.0)}
+.MJXp-scale1 {-webkit-transform: scaleX(.1); -moz-transform: scaleX(.1); -ms-transform: scaleX(.1); -o-transform: scaleX(.1); transform: scaleX(.1)}
+.MJXp-scale2 {-webkit-transform: scaleX(.2); -moz-transform: scaleX(.2); -ms-transform: scaleX(.2); -o-transform: scaleX(.2); transform: scaleX(.2)}
+.MJXp-scale3 {-webkit-transform: scaleX(.3); -moz-transform: scaleX(.3); -ms-transform: scaleX(.3); -o-transform: scaleX(.3); transform: scaleX(.3)}
+.MJXp-scale4 {-webkit-transform: scaleX(.4); -moz-transform: scaleX(.4); -ms-transform: scaleX(.4); -o-transform: scaleX(.4); transform: scaleX(.4)}
+.MJXp-scale5 {-webkit-transform: scaleX(.5); -moz-transform: scaleX(.5); -ms-transform: scaleX(.5); -o-transform: scaleX(.5); transform: scaleX(.5)}
+.MJXp-scale6 {-webkit-transform: scaleX(.6); -moz-transform: scaleX(.6); -ms-transform: scaleX(.6); -o-transform: scaleX(.6); transform: scaleX(.6)}
+.MJXp-scale7 {-webkit-transform: scaleX(.7); -moz-transform: scaleX(.7); -ms-transform: scaleX(.7); -o-transform: scaleX(.7); transform: scaleX(.7)}
+.MJXp-scale8 {-webkit-transform: scaleX(.8); -moz-transform: scaleX(.8); -ms-transform: scaleX(.8); -o-transform: scaleX(.8); transform: scaleX(.8)}
+.MJXp-scale9 {-webkit-transform: scaleX(.9); -moz-transform: scaleX(.9); -ms-transform: scaleX(.9); -o-transform: scaleX(.9); transform: scaleX(.9)}
+.MathJax_PHTML .noError {vertical-align: ; font-size: 90%; text-align: left; color: black; padding: 1px 3px; border: 1px solid}
+</style></head>
+
+  <body><div id="MathJax_Message" style="display: none;"></div>
+    <div class="wrapper-masthead">
+      <div class="container">
+        <header class="masthead clearfix">
+          <a href="https://sassafras13.github.io/" class="site-avatar"><img src="./The Reparameterization Trick_files/emma_benjaminson_headshot.png"></a>
+
+          <div class="site-info">
+            <h1 class="site-name"><a href="https://sassafras13.github.io/">Emma Benjaminson</a></h1>
+            <p class="site-description">Data Scientist</p>
+          </div>
+
+          <nav>
+            <a href="https://sassafras13.github.io/">Blog</a>
+            <a href="https://sassafras13.github.io/blogindex/">Blog Index</a>
+            <a href="https://sassafras13.github.io/bookshelf/">Bookshelf</a>
+            <a href="https://sassafras13.github.io/about">About</a>
+          </nav>
+        </header>
+      </div>
+    </div>
+
+    <div id="main" role="main" class="container">
+      <article class="post">
+  <h1>The Reparameterization Trick</h1>
+
+  <div class="entry">
+    <p>We first encountered the <strong>reparameterization trick</strong> when learning about <a href="https://sassafras13.github.io/VAE-adv/">variational autoencoders</a> and how they approximate posterior distributions using KL divergence and the Evidence Lower Bound (ELBO). We saw that, if we were training a neural network to act as a VAE, then eventually we would need to perform backpropagation across a node in the network that was stochastic, because the ELBO has a stochastic term. But we cannot perform backpropagation across a stochastic node, because we cannot take the derivative of a random variable. So instead, we used something called the reparameterization trick, to restructure the problem. In this post, I am going to go into this solution in more detail. First I will outline why we need the trick in the first place, and then I will try to provide more insight into the mathematics behind the reparameterization trick.</p>
+
+<h2 id="why-do-we-need-the-reparameterization-trick">Why Do We Need the Reparameterization Trick?</h2>
+
+<p>As I mentioned in this introduction, I learned about the reparameterization trick in the context of developing variational autoencoders, so I will focus on that application here. However, it is worth noting that the reparameterization trick can be applied to a wide variety of distributions and functions, and it is used in multiple places besides VAEs [1].</p>
+
+<p>In a variational autoencoder, we are trying to learn an approximation of a posterior distribution, p(z <em>given</em> x), which converts the input data, x, to a latent space representation, z.  We are doing this by learning an optimal approximation of p(z <em>given</em> x), which we call <em>q*</em>. I can optimize <em>q*</em> by minimizing a loss function using gradient descent - in other words, by using backpropagation to teach a neural network to represent <em>q*</em>. But the problem we run into when we do this is that we cannot take the derivative of one particular term in our loss function. The loss function can be written as follows [2]:</p>
+
+<p><img src="./The Reparameterization Trick_files/2020-05-25-ReparamTrick-eqn1.png" alt="Eqn 1" title="Equation 1">   <br>
+Equation 1</p>
+
+<p>The first term in the loss function is stochastic with respect to z, because z is a random variable [3]. I cannot take the derivative of a random variable, so the backpropagation algorithm will get stuck at this node in the neural network [3]. Consider the left-hand side diagram in Figure 1, where the stochastic node (in orange) is acting as a bottleneck, preventing us from backpropagating the derivatives from <em>f</em> to <em>phi</em> and <em>x</em> [3]. I can use the reparameterization trick to restructure this part of the neural network so that I have a deterministic node representing z, which provides a clear path for the backpropagation algorithm to convey information from <em>f</em> to <em>phi</em> and <em>x</em>, as shown in the right-hand side of Figure 1 [3].</p>
+
+<p><img src="./The Reparameterization Trick_files/2020-05-25-ReparamTrick-fig1.png" alt="Fig 1" title="Figure 1">   <br>
+Figure 1 - Source [3]</p>
+
+<p>So in short, the reparameterization trick allows us to restructure the way we take the derivative of the loss function so that we <em>can</em> take its derivative and optimize our approximate distribution, <em>q*</em> [3]. In the next section, I will give a mathematical grounding for the reparameterization trick.</p>
+
+<h2 id="the-math-behind-the-curtain">The Math Behind the Curtain</h2>
+
+<p>In the last section we saw that the reparameterization trick somehow converts the representation of the random variable, z, into a deterministic part and a stochastic part [3]. Let me just solve the mystery right away and say that the reparameterization trick rewrites the representation of z as a random variable into the following expression [1]:</p>
+
+<p><img src="./The Reparameterization Trick_files/2020-05-25-ReparamTrick-eqn2.png" alt="Eqn 2" title="Equation 2">   <br>
+Equation 2</p>
+
+<p>The first term in the reparameterized version of z - specifically, mu - is deterministic and so we can take the derivative of z. The standard deviation is still stochastic, but that’s okay, because it is no longer along the critical path in our backpropagation chain [3]. But why can we do this?</p>
+
+<p>The goal of reparameterization is to find a way to recast a statistical expression in a different way while preserving its meaning [1]. The reparameterized expression has to be equivalent to the original, but by writing it in a different form, we are often making it possible to look at the expression in a new way, and we can use new tools to work with it [1].</p>
+
+<p>Reparameterization is a method of generating non-uniform random numbers by transforming some base distribution, p(epsilon), to a desired distribution, p(z; theta) [1]. The transformation from the base to the desired distribution can be written as g(epsilon ; theta), as follows [1]:</p>
+
+<p><img src="./The Reparameterization Trick_files/2020-05-25-ReparamTrick-eqn3.png" alt="Eqn 3" title="Equation 3">   <br>
+Equation 3</p>
+
+<p>The transformation must be some combination of simple operations, like addition, multiplication, logarithmic functions, exponentials and trigonometric functions [1]. The base distribution, p(epsilon), must also be easy to sample from [1]. We then use these basic functions to transform the base distribution to the desired distribution [1]. There are three primary approaches to building this transformation, g(epsilon ; theta) [1]:</p>
+
+<p><strong>(1) Inversion.</strong> If we know the cumulative density function (cdf) for the desired distribution, p(z ; theta), then we can simply invert it and apply it to the base distribution [1]. In this approach, the base distribution must be a uniform distribution so that it will take on exactly the cdf of the desired distribution [1]. This approach also assumes that the cdf is invertible [1]. Given the simplicity of this approach, it is quite popular [1].</p>
+
+<p><strong>(2) Polar Coordinate Transformation.</strong> This method can be used to represent a pair of values pulled from a random variable (we can also call these random variates) in polar coordinates [1]. For example, if we had pulled (x, y) from p(z; theta), we could rewrite them as (r cos(theta), r sin(theta)) [1]. The reason we would want to do this is that it enables us to use other sampling tools to work with these random variates that we could not use otherwise [1].</p>
+
+<p><strong>(3) Coordinate Transformation.</strong> More generally than polar coordinates, these methods use shifting and scaling transformations (i.e. addition and multiplication) to transform a base distribution [1]. This approach is perhaps the simplest of the three we have seen here, and it is the transformation that we use to reparameterize a normal distribution [1].</p>
+
+<p>It is worth noting that there are ways to reparameterize lots of different expressions, not just the normal distribution [1]. These reparameterizations are often called “one-liners” because it takes one line to convey the reparameterization* [1]. Some other commonly used reparameterizations are shown in Figure 2. These reparameterizations are also easy to find in many software packages, so don’t bother writing your own functions [1].</p>
+
+<p><img src="./The Reparameterization Trick_files/2020-05-25-ReparamTrick-fig2.png" alt="Fig 2" title="Figure 2">   <br>
+Figure 2 - Source [1]</p>
+
+<p>Hopefully this explanation provides a little more context for where the reparameterization trick comes from, and that you can understand why we might want to use it. I want to leave you with one final comment: the reparameterization trick works very well as long as you are using continuous distributions. However, it will not work for discrete collections of points; I will be writing soon about the Gumbel-softmax distribution, which was developed to deal with this problem, so stay tuned.</p>
+
+<h2 id="footnotes">Footnotes:</h2>
+<p>*The term “one-liner” comes from a 1996 paper that developed these reparameterizations for many different distributions [1]. The paper was written by Luc Devroye and can be found <a href="https://www.informs-sim.org/wsc96papers/035.pdf">here</a> [1].</p>
+
+<h2 id="references">References:</h2>
+
+<p>[1] Mohamed, S. “Machine Learning Trick of the Day (4): Reparameterisation Tricks.” The Spectator, Shakir’s Machine Learning Blog. 29 Oct 2015. <a href="http://blog.shakirm.com/2015/10/machine-learning-trick-of-the-day-4-reparameterisation-tricks/">http://blog.shakirm.com/2015/10/machine-learning-trick-of-the-day-4-reparameterisation-tricks/</a> Visited 26 May 2020.</p>
+
+<p>[2] Altosaar, J. “Tutorial - What is a variational autoencoder?” <a href="https://jaan.io/what-is-variational-autoencoder-vae-tutorial/">https://jaan.io/what-is-variational-autoencoder-vae-tutorial/</a> Visited 06 May 2020.</p>
+
+<p>[3] Soleimany, A. “Deep Generative Modeling, MIT 6.S191.” MIT Introduction to Deep Learning 6.S191: Lecture 4. 28 Feb 2020. <a href="https://www.youtube.com/watch?v=rZufA635dq4">https://www.youtube.com/watch?v=rZufA635dq4</a> Visited 26 May 2020.</p>
+
+  </div>
+
+  <div class="date">
+    Written on May 26, 2020
+  </div>
+
+  
+  
+  <script src="./The Reparameterization Trick_files/MathJax.js.Без названия" id=""></script>
+
+</article>
+
+    </div>
+
+    <div class="wrapper-footer">
+      <div class="container">
+        <footer class="footer">
+          
+
+
+
+<a href="https://github.com/sassafras13"><i class="svg-icon github"></i></a>
+
+<a href="https://www.linkedin.com/in/emma-benjaminson-2176952a"><i class="svg-icon linkedin"></i></a>
+
+<a href="https://sassafras13.github.io/feed.xml"><i class="svg-icon rss"></i></a>
+
+
+
+
+        </footer>
+      </div>
+    </div>
+
+    
+
+  
+
+</body></html>
